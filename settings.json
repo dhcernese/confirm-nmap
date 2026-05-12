@@ -1,0 +1,93 @@
+{
+  "request": {
+    "scheme": "https",
+    "path": "/xmldata?item=All",
+    "timeout": 5.0
+  },
+  "nmap": {
+    "args_file": "nmap-ilo443.args.txt"
+  },
+  "execution": {
+    "workers": 32,
+    "max_targets": 2048,
+    "progress_every": 50
+  },
+  "xml_fields": [
+    {
+      "name": "ServerSerial",
+      "xpath": ".//HSI/SBSN"
+    },
+    {
+      "name": "ServerProductName",
+      "xpath": ".//HSI/SPN"
+    },
+    {
+      "name": "ServerUUID",
+      "xpath": ".//HSI/UUID"
+    },
+    {
+      "name": "ServerProductId",
+      "xpath": ".//HSI/PRODUCTID"
+    },
+    {
+      "name": "ILOProductName",
+      "xpath": ".//MP/PN"
+    },
+    {
+      "name": "ILOFirmware",
+      "xpath": ".//MP/FWRI"
+    },
+    {
+      "name": "ILOSerial",
+      "xpath": ".//MP/SN"
+    },
+    {
+      "name": "ManagementProcessorState",
+      "xpath": ".//MP/ST"
+    },
+    {
+      "name": "OverallHealthStatus",
+      "xpath": ".//HEALTH/STATUS"
+    },
+    {
+      "name": "ILOManagementIP",
+      "xpaths": [
+        ".//NICS/NIC[DESCRIPTION='iLO 6']/IPADDR",
+        ".//NICS/NIC[DESCRIPTION='iLO 5']/IPADDR",
+        ".//NICS/NIC[DESCRIPTION='iLO 4']/IPADDR"
+      ],
+      "exclude_values": [
+        "Unknown",
+        "N/A"
+      ]
+    },
+    {
+      "name": "AllNICMacAddresses",
+      "xpath": ".//NICS/NIC/MACADDR",
+      "mode": "all",
+      "separator": ", "
+    },
+    {
+      "name": "AllNICDescriptions",
+      "xpath": ".//NICS/NIC/DESCRIPTION",
+      "mode": "all",
+      "separator": " | "
+    },
+    {
+      "name": "AllNICStatuses",
+      "xpath": ".//NICS/NIC/STATUS",
+      "mode": "all",
+      "separator": ", "
+    },
+    {
+      "name": "AllAssignedNICIPs",
+      "xpath": ".//NICS/NIC/IPADDR",
+      "mode": "all",
+      "separator": ", ",
+      "exclude_values": [
+        "Unknown",
+        "N/A"
+      ]
+    }
+  ]
+}
