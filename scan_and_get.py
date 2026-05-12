@@ -332,6 +332,7 @@ def fetch_endpoint(
                 parse_error=parse_error,
             )
         except requests.RequestException as exc:
+            print(f"[error] {ip} -> {url} ({exc})")
             return HttpResult(ip=ip, url=url, ok=False, error=str(exc))
 
     results_by_ip: dict[str, HttpResult] = {}
@@ -350,24 +351,30 @@ def fetch_endpoint(
     return [results_by_ip[ip] for ip in hosts]
 
 
-def write_csv_results(results: List[HttpResult], field_specs: list[dict[str, Any]], csv_path: str) -> None:
+def write_csv_results(
+    results: List[HttpResult],
+    field_specs: list[dict[str, Any]],
+    csv_path: str,
+    debug: bool = False,
+) -> None:
     field_names = [spec["name"] for spec in field_specs]
-    headers = ["ip", "url", "request_ok", "http_status", "error", "xml_parse_error", *field_names]
+    headers = ["ip"]
+    if debug:
+        headers.extend(["url", "error", "xml_parse_error"])
+    headers.extend(field_names)
 
     with open(csv_path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=headers)
         writer.writeheader()
 
         for result in results:
-            row: dict[str, Any] = {
-                "ip": result.ip,
-                "url": result.url,
-                "request_ok": result.ok,
-                "http_status": result.status_code if result.status_code is not None else "",
-                "error": result.error or "",
-                "xml_parse_error": result.parse_error or "",
-            }
-
+            row = {"ip": result.ip}
+            if debug:
+                row.update({
+                    "url": result.url,
+                    "error": result.error or "",
+                    "xml_parse_error": result.parse_error or "",
+                })
             for field_name in field_names:
                 value = ""
                 if result.parsed_fields:
@@ -457,6 +464,11 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=None,
         help="Print progress after every N completed HTTP requests. Overrides settings JSON if provided.",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Include debug columns in CSV output (url, error, xml_parse_error).",
     )
 
     return parser.parse_args()
@@ -566,7 +578,7 @@ def main() -> int:
         else:
             print(f"[error] {result.ip} -> {result.url} ({result.error})")
 
-    write_csv_results(results=results, field_specs=xml_fields, csv_path=args.csv_output)
+    write_csv_results(results=results, field_specs=xml_fields, csv_path=args.csv_output, debug=args.debug)
     print(f"\nCSV written: {args.csv_output}")
 
     return 0
