@@ -205,7 +205,7 @@
         ]
       },
       {
-        "name": "IloManagerHostName",
+        "name": "OEM ManagerHostName",
         "request_paths": [
           "/redfish/v1"
         ],
@@ -214,7 +214,7 @@
         ]
       },
       {
-        "name": "IloManagerFQDN",
+        "name": "OEM ManagerFQDN",
         "request_paths": [
           "/redfish/v1"
         ],
@@ -223,7 +223,7 @@
         ]
       },
       {
-        "name": "IloManagerType",
+        "name": "OEM ManagerType",
         "request_paths": [
           "/redfish/v1"
         ],
@@ -232,7 +232,7 @@
         ]
       },
       {
-        "name": "IloManagerFirmwareVersion",
+        "name": "OEM ManagerFirmwareVersion",
         "request_paths": [
           "/redfish/v1"
         ],
@@ -241,7 +241,7 @@
         ]
       },
       {
-        "name": "IloManagerHealth",
+        "name": "OEM ManagerHealth",
         "request_paths": [
           "/redfish/v1"
         ],
@@ -250,7 +250,16 @@
         ]
       },
       {
-        "name": "IloTime",
+        "name": "OEM ExternalManager",
+        "request_paths": [
+          "/redfish/v1"
+        ],
+        "json_pointers": [
+          "/Oem/Hpe/Manager/0/ExternalManager"
+        ]
+      },
+      {
+        "name": "OEM Time",
         "request_paths": [
           "/redfish/v1"
         ],
