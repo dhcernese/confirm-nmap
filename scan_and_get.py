@@ -33,6 +33,8 @@ class HttpResult:
     body_text: str | None = None
     parsed_fields: dict[str, str] | None = None
     parse_error: str | None = None
+    redfish_fields: dict[str, str] | None = None
+    redfish_error: str | None = None
 
 
 def resolve_relative_to_settings(settings_path: str, candidate_path: str) -> str:
@@ -231,6 +233,68 @@ def load_settings(settings_path: str) -> dict[str, Any]:
         ):
             raise RuntimeError("nmap.args_file must be a non-empty string")
 
+    redfish_settings = data.get("redfish")
+    if redfish_settings is not None:
+        if not isinstance(redfish_settings, dict):
+            raise RuntimeError("settings.redfish must be an object")
+
+        if "enabled" in redfish_settings and not isinstance(redfish_settings["enabled"], bool):
+            raise RuntimeError("redfish.enabled must be a boolean")
+
+        if "timeout" in redfish_settings and not isinstance(redfish_settings["timeout"], (int, float)):
+            raise RuntimeError("redfish.timeout must be a number")
+
+        redfish_fields = redfish_settings.get("fields", [])
+        if not isinstance(redfish_fields, list):
+            raise RuntimeError("redfish.fields must be an array")
+
+        for idx, item in enumerate(redfish_fields):
+            if not isinstance(item, dict):
+                raise RuntimeError(f"redfish.fields[{idx}] must be an object")
+
+            if not isinstance(item.get("name"), str) or not item.get("name"):
+                raise RuntimeError(f"redfish.fields[{idx}].name must be a non-empty string")
+
+            path_candidates = []
+            for key in ("path", "request_path"):
+                if isinstance(item.get(key), str) and item.get(key):
+                    path_candidates.append(item[key])
+            for key in ("paths", "request_paths"):
+                value = item.get(key)
+                if isinstance(value, list):
+                    path_candidates.extend([p for p in value if isinstance(p, str) and p])
+            if not path_candidates:
+                raise RuntimeError(
+                    f"redfish.fields[{idx}] must define at least one non-empty path using path/request_path or paths/request_paths"
+                )
+
+            pointer_candidates = []
+            for key in ("json_pointer", "pointer"):
+                if isinstance(item.get(key), str) and item.get(key):
+                    pointer_candidates.append(item[key])
+            for key in ("json_pointers", "pointers"):
+                value = item.get(key)
+                if isinstance(value, list):
+                    pointer_candidates.extend([p for p in value if isinstance(p, str) and p])
+            if not pointer_candidates:
+                raise RuntimeError(
+                    f"redfish.fields[{idx}] must define at least one non-empty JSON pointer using json_pointer/pointer or json_pointers/pointers"
+                )
+
+            mode = item.get("mode", "first")
+            if mode not in ("first", "all"):
+                raise RuntimeError(f"redfish.fields[{idx}].mode must be 'first' or 'all'")
+
+            separator = item.get("separator", " | ")
+            if not isinstance(separator, str):
+                raise RuntimeError(f"redfish.fields[{idx}].separator must be a string")
+
+            exclude_values = item.get("exclude_values", [])
+            if not isinstance(exclude_values, list) or not all(
+                isinstance(value, str) for value in exclude_values
+            ):
+                raise RuntimeError(f"redfish.fields[{idx}].exclude_values must be an array of strings")
+
     return data
 
 
@@ -252,6 +316,186 @@ def get_candidate_xpaths(spec: dict[str, Any]) -> list[str]:
     if isinstance(spec.get("xpaths"), list) and spec["xpaths"]:
         return spec["xpaths"]
     return [spec["xpath"]]
+
+
+def get_candidate_redfish_paths(spec: dict[str, Any]) -> list[str]:
+    for key in ("request_paths", "paths"):
+        if isinstance(spec.get(key), list) and spec[key]:
+            return spec[key]
+    for key in ("request_path", "path"):
+        if isinstance(spec.get(key), str) and spec[key]:
+            return [spec[key]]
+    return []
+
+
+def get_candidate_redfish_pointers(spec: dict[str, Any]) -> list[str]:
+    for key in ("json_pointers", "pointers"):
+        if isinstance(spec.get(key), list) and spec[key]:
+            return spec[key]
+    for key in ("json_pointer", "pointer"):
+        if isinstance(spec.get(key), str) and spec[key]:
+            return [spec[key]]
+    return []
+
+
+def decode_json_pointer_token(token: str) -> str:
+    return token.replace("~1", "/").replace("~0", "~")
+
+
+def resolve_json_pointer(document: Any, pointer: str) -> tuple[bool, Any]:
+    if pointer == "":
+        return True, document
+
+    if not pointer.startswith("/"):
+        return False, None
+
+    current = document
+    for raw_token in pointer.split("/")[1:]:
+        token = decode_json_pointer_token(raw_token)
+        if isinstance(current, list):
+            if not token.isdigit():
+                return False, None
+            index = int(token)
+            if index < 0 or index >= len(current):
+                return False, None
+            current = current[index]
+            continue
+
+        if isinstance(current, dict):
+            if token not in current:
+                return False, None
+            current = current[token]
+            continue
+
+        return False, None
+
+    return True, current
+
+
+def normalize_json_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, str):
+        return value.strip()
+    return json.dumps(value)
+
+
+def flatten_json_values(value: Any) -> list[str]:
+    if isinstance(value, list):
+        flattened: list[str] = []
+        for item in value:
+            flattened.extend(flatten_json_values(item))
+        return flattened
+
+    return [normalize_json_value(value)]
+
+
+def extract_redfish_fields(
+    payload_by_path: dict[str, Any],
+    field_specs: list[dict[str, Any]],
+) -> dict[str, str]:
+    extracted: dict[str, str] = {}
+
+    for spec in field_specs:
+        field_name = spec["name"]
+        mode = spec.get("mode", "first")
+        separator = spec.get("separator", " | ")
+        exclude_values = spec.get("exclude_values", [])
+        paths = get_candidate_redfish_paths(spec)
+        pointers = get_candidate_redfish_pointers(spec)
+
+        if mode == "all":
+            collected: list[str] = []
+            for path in paths:
+                payload = payload_by_path.get(path)
+                if payload is None:
+                    continue
+                for pointer in pointers:
+                    found, raw_value = resolve_json_pointer(payload, pointer)
+                    if not found:
+                        continue
+                    for value in flatten_json_values(raw_value):
+                        if value and not is_filtered_value(value, exclude_values):
+                            collected.append(value)
+
+            extracted[field_name] = separator.join(collected) if collected else "<missing>"
+            continue
+
+        found = False
+        for path in paths:
+            payload = payload_by_path.get(path)
+            if payload is None:
+                continue
+            for pointer in pointers:
+                resolved, raw_value = resolve_json_pointer(payload, pointer)
+                if not resolved:
+                    continue
+                values = [
+                    value
+                    for value in flatten_json_values(raw_value)
+                    if value and not is_filtered_value(value, exclude_values)
+                ]
+                if not values:
+                    continue
+                extracted[field_name] = values[0]
+                found = True
+                break
+            if found:
+                break
+
+        if not found:
+            extracted[field_name] = "<missing>"
+
+    return extracted
+
+
+def fetch_redfish_fields_for_host(
+    ip: str,
+    scheme: str,
+    timeout: float,
+    field_specs: list[dict[str, Any]],
+) -> tuple[dict[str, str], str | None]:
+    if not field_specs:
+        return {}, None
+
+    if scheme == "https":
+        urllib3.disable_warnings(category=InsecureRequestWarning)
+
+    unique_paths: list[str] = []
+    seen_paths: set[str] = set()
+    for spec in field_specs:
+        for path in get_candidate_redfish_paths(spec):
+            normalized_path = path if path.startswith("/") else f"/{path}"
+            if normalized_path not in seen_paths:
+                seen_paths.add(normalized_path)
+                unique_paths.append(normalized_path)
+
+    payload_by_path: dict[str, Any] = {}
+    request_errors: list[str] = []
+
+    for normalized_path in unique_paths:
+        url = f"{scheme}://{ip}{normalized_path}"
+        try:
+            resp = requests.get(url, timeout=timeout, verify=False if scheme == "https" else True)
+        except requests.RequestException as exc:
+            request_errors.append(f"{normalized_path}: {exc}")
+            continue
+
+        if not resp.ok:
+            request_errors.append(f"{normalized_path}: HTTP {resp.status_code}")
+
+        try:
+            payload_by_path[normalized_path] = resp.json()
+        except ValueError:
+            request_errors.append(f"{normalized_path}: response was not JSON")
+
+    extracted = extract_redfish_fields(payload_by_path=payload_by_path, field_specs=field_specs)
+    error_text = "; ".join(request_errors) if request_errors else None
+    return extracted, error_text
 
 
 def parse_xml_fields(xml_text: str, field_specs: list[dict[str, Any]]) -> tuple[dict[str, str], str | None]:
@@ -310,6 +554,8 @@ def fetch_endpoint(
     path: str,
     timeout: float,
     xml_fields: list[dict[str, str]],
+    redfish_fields: list[dict[str, Any]],
+    redfish_timeout: float,
     workers: int,
     progress_every: int,
 ) -> List[HttpResult]:
@@ -322,6 +568,12 @@ def fetch_endpoint(
         try:
             resp = requests.get(url, timeout=timeout, verify=False if scheme == "https" else True)
             parsed_fields, parse_error = parse_xml_fields(resp.text, xml_fields)
+            redfish_values, redfish_error = fetch_redfish_fields_for_host(
+                ip=ip,
+                scheme=scheme,
+                timeout=redfish_timeout,
+                field_specs=redfish_fields,
+            )
             return HttpResult(
                 ip=ip,
                 url=url,
@@ -330,10 +582,25 @@ def fetch_endpoint(
                 body_text=resp.text,
                 parsed_fields=parsed_fields,
                 parse_error=parse_error,
+                redfish_fields=redfish_values,
+                redfish_error=redfish_error,
             )
         except requests.RequestException as exc:
             print(f"[error] {ip} -> {url} ({exc})")
-            return HttpResult(ip=ip, url=url, ok=False, error=str(exc))
+            redfish_values, redfish_error = fetch_redfish_fields_for_host(
+                ip=ip,
+                scheme=scheme,
+                timeout=redfish_timeout,
+                field_specs=redfish_fields,
+            )
+            return HttpResult(
+                ip=ip,
+                url=url,
+                ok=False,
+                error=str(exc),
+                redfish_fields=redfish_values,
+                redfish_error=redfish_error,
+            )
 
     results_by_ip: dict[str, HttpResult] = {}
     total_hosts = len(hosts)
@@ -354,14 +621,17 @@ def fetch_endpoint(
 def write_csv_results(
     results: List[HttpResult],
     field_specs: list[dict[str, Any]],
+    redfish_field_specs: list[dict[str, Any]],
     csv_path: str,
     debug: bool = False,
 ) -> None:
     field_names = [spec["name"] for spec in field_specs]
+    redfish_field_names = [spec["name"] for spec in redfish_field_specs]
     headers = ["ip"]
     if debug:
-        headers.extend(["url", "error", "xml_parse_error"])
+        headers.extend(["url", "error", "xml_parse_error", "redfish_error"])
     headers.extend(field_names)
+    headers.extend(redfish_field_names)
 
     with open(csv_path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=headers)
@@ -374,11 +644,17 @@ def write_csv_results(
                     "url": result.url,
                     "error": result.error or "",
                     "xml_parse_error": result.parse_error or "",
+                    "redfish_error": result.redfish_error or "",
                 })
             for field_name in field_names:
                 value = ""
                 if result.parsed_fields:
                     value = result.parsed_fields.get(field_name, "")
+                row[field_name] = value
+            for field_name in redfish_field_names:
+                value = ""
+                if result.redfish_fields:
+                    value = result.redfish_fields.get(field_name, "")
                 row[field_name] = value
 
             writer.writerow(row)
@@ -468,7 +744,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--debug",
         action="store_true",
-        help="Include debug columns in CSV output (url, error, xml_parse_error).",
+        help="Include debug columns in CSV output (url, error, xml_parse_error, redfish_error).",
+    )
+    parser.add_argument(
+        "--no-redfish",
+        action="store_true",
+        help="Skip unauthenticated Redfish enrichment queries.",
     )
 
     return parser.parse_args()
@@ -486,6 +767,7 @@ def main() -> int:
     request_settings = settings.get("request", {}) if isinstance(settings.get("request", {}), dict) else {}
     nmap_settings = settings.get("nmap", {}) if isinstance(settings.get("nmap", {}), dict) else {}
     execution_settings = settings.get("execution", {}) if isinstance(settings.get("execution", {}), dict) else {}
+    redfish_settings = settings.get("redfish", {}) if isinstance(settings.get("redfish", {}), dict) else {}
 
     scheme = args.scheme or request_settings.get("scheme", "https")
     path = args.path or request_settings.get("path", "/xmldata?item=All")
@@ -509,6 +791,9 @@ def main() -> int:
         args.progress_every if args.progress_every is not None else int(execution_settings.get("progress_every", 50))
     )
     xml_fields = settings["xml_fields"]
+    redfish_enabled = bool(redfish_settings.get("enabled", True)) and not args.no_redfish
+    redfish_fields = redfish_settings.get("fields", []) if redfish_enabled else []
+    redfish_timeout = float(redfish_settings.get("timeout", timeout))
 
     try:
         require_open_port_output = "-Pn" in nmap_arg_tokens
@@ -561,6 +846,8 @@ def main() -> int:
         path=path,
         timeout=timeout,
         xml_fields=xml_fields,
+        redfish_fields=redfish_fields,
+        redfish_timeout=redfish_timeout,
         workers=workers,
         progress_every=progress_every,
     )
@@ -575,10 +862,26 @@ def main() -> int:
             elif result.parsed_fields:
                 for field_name, field_value in result.parsed_fields.items():
                     print(f"        {field_name}: {field_value}")
+            if result.redfish_fields:
+                for field_name, field_value in result.redfish_fields.items():
+                    print(f"        {field_name}: {field_value}")
+            if result.redfish_error:
+                print(f"        Redfish: {result.redfish_error}")
         else:
             print(f"[error] {result.ip} -> {result.url} ({result.error})")
+            if result.redfish_fields:
+                for field_name, field_value in result.redfish_fields.items():
+                    print(f"        {field_name}: {field_value}")
+            if result.redfish_error:
+                print(f"        Redfish: {result.redfish_error}")
 
-    write_csv_results(results=results, field_specs=xml_fields, csv_path=args.csv_output, debug=args.debug)
+    write_csv_results(
+        results=results,
+        field_specs=xml_fields,
+        redfish_field_specs=redfish_fields,
+        csv_path=args.csv_output,
+        debug=args.debug,
+    )
     print(f"\nCSV written: {args.csv_output}")
 
     return 0

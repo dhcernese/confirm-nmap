@@ -4,6 +4,53 @@
     "path": "/xmldata?item=All",
     "timeout": 5.0
   },
+  "redfish": {
+    "enabled": true,
+    "timeout": 5.0,
+    "fields": [
+      {
+        "name": "SerialNumber",
+        "request_paths": [
+          "/redfish/v1/Systems/1",
+          "/redfish/v1/Systems/System.Embedded.1"
+        ],
+        "json_pointers": [
+          "/SerialNumber"
+        ]
+      },
+      {
+        "name": "Model",
+        "request_paths": [
+          "/redfish/v1/Systems/1",
+          "/redfish/v1/Systems/System.Embedded.1"
+        ],
+        "json_pointers": [
+          "/Model"
+        ]
+      },
+      {
+        "name": "HostName",
+        "request_paths": [
+          "/redfish/v1/Systems/1",
+          "/redfish/v1/Systems/System.Embedded.1"
+        ],
+        "json_pointers": [
+          "/HostName"
+        ]
+      },
+      {
+        "name": "Managers",
+        "request_paths": [
+          "/redfish/v1",
+          "/redfish/v1/Systems"
+        ],
+        "json_pointers": [
+          "/Managers/@odata.id",
+          "/Members/0/@odata.id"
+        ]
+      }
+    ]
+  },
   "nmap": {
     "args_file": "nmap-ilo443.args.txt"
   },
