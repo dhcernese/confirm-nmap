@@ -7,7 +7,7 @@
   "redfish": {
     "enabled": true,
     "timeout": 5.0,
-    "fields": [
+    "disabled_fields_http_401": [
       {
         "name": "SerialNumber",
         "request_paths": [
@@ -39,14 +39,223 @@
         ]
       },
       {
-        "name": "Managers",
+        "name": "FirmwareVersion",
         "request_paths": [
-          "/redfish/v1",
-          "/redfish/v1/Systems"
+          "/redfish/v1/Managers/1/"
         ],
         "json_pointers": [
-          "/Managers/@odata.id",
-          "/Members/0/@odata.id"
+          "/FirmwareVersion"
+        ]
+      }
+    ],
+    "all_discovered_unauth_fields_reference": {
+      "request_path": "/redfish/v1",
+      "json_pointers": [
+        "/@odata.context",
+        "/@odata.etag",
+        "/@odata.id",
+        "/@odata.type",
+        "/AccountService/@odata.id",
+        "/CertificateService/@odata.id",
+        "/Chassis/@odata.id",
+        "/EventService/@odata.id",
+        "/Fabrics/@odata.id",
+        "/Id",
+        "/JsonSchemas/@odata.id",
+        "/Links/Sessions/@odata.id",
+        "/Managers/@odata.id",
+        "/Name",
+        "/Oem/Hpe/@odata.context",
+        "/Oem/Hpe/@odata.type",
+        "/Oem/Hpe/CACLoginUri",
+        "/Oem/Hpe/Links/ResourceDirectory/@odata.id",
+        "/Oem/Hpe/Manager/0/DefaultLanguage",
+        "/Oem/Hpe/Manager/0/ExternalManager",
+        "/Oem/Hpe/Manager/0/FQDN",
+        "/Oem/Hpe/Manager/0/HostName",
+        "/Oem/Hpe/Manager/0/Languages/0/Language",
+        "/Oem/Hpe/Manager/0/Languages/0/TranslationName",
+        "/Oem/Hpe/Manager/0/Languages/0/Version",
+        "/Oem/Hpe/Manager/0/ManagerFirmwareVersion",
+        "/Oem/Hpe/Manager/0/ManagerType",
+        "/Oem/Hpe/Manager/0/Status/Health",
+        "/Oem/Hpe/Moniker/ADVLIC",
+        "/Oem/Hpe/Moniker/BMC",
+        "/Oem/Hpe/Moniker/BSYS",
+        "/Oem/Hpe/Moniker/CBM",
+        "/Oem/Hpe/Moniker/CLASS",
+        "/Oem/Hpe/Moniker/FEDGRP",
+        "/Oem/Hpe/Moniker/IPROV",
+        "/Oem/Hpe/Moniker/PRODABR",
+        "/Oem/Hpe/Moniker/PRODFAM",
+        "/Oem/Hpe/Moniker/PRODGEN",
+        "/Oem/Hpe/Moniker/PRODNAM",
+        "/Oem/Hpe/Moniker/PRODTAG",
+        "/Oem/Hpe/Moniker/RDA",
+        "/Oem/Hpe/Moniker/STDLIC",
+        "/Oem/Hpe/Moniker/SUMABR",
+        "/Oem/Hpe/Moniker/SUMGR",
+        "/Oem/Hpe/Moniker/SYSFAM",
+        "/Oem/Hpe/Moniker/SYSMGMT",
+        "/Oem/Hpe/Moniker/VENDABR",
+        "/Oem/Hpe/Moniker/VENDNAM",
+        "/Oem/Hpe/Moniker/VNIC",
+        "/Oem/Hpe/Moniker/WWW",
+        "/Oem/Hpe/Moniker/WWWAHSV",
+        "/Oem/Hpe/Moniker/WWWBMC",
+        "/Oem/Hpe/Moniker/WWWDOC",
+        "/Oem/Hpe/Moniker/WWWERS",
+        "/Oem/Hpe/Moniker/WWWGLIS",
+        "/Oem/Hpe/Moniker/WWWIOL",
+        "/Oem/Hpe/Moniker/WWWLIC",
+        "/Oem/Hpe/Moniker/WWWLML",
+        "/Oem/Hpe/Moniker/WWWPASS",
+        "/Oem/Hpe/Moniker/WWWPRV",
+        "/Oem/Hpe/Moniker/WWWQSPEC",
+        "/Oem/Hpe/Moniker/WWWRESTDOC",
+        "/Oem/Hpe/Moniker/WWWSUP",
+        "/Oem/Hpe/Moniker/WWWSWLIC",
+        "/Oem/Hpe/Sessions/CertCommonName",
+        "/Oem/Hpe/Sessions/CertificateLoginEnabled",
+        "/Oem/Hpe/Sessions/KerberosEnabled",
+        "/Oem/Hpe/Sessions/LDAPAuthLicenced",
+        "/Oem/Hpe/Sessions/LDAPEnabled",
+        "/Oem/Hpe/Sessions/LocalLoginEnabled",
+        "/Oem/Hpe/Sessions/LoginFailureDelay",
+        "/Oem/Hpe/Sessions/LoginHint/Hint",
+        "/Oem/Hpe/Sessions/LoginHint/HintPOSTData/Password",
+        "/Oem/Hpe/Sessions/LoginHint/HintPOSTData/UserName",
+        "/Oem/Hpe/Sessions/SecurityOverride",
+        "/Oem/Hpe/Sessions/ServerName",
+        "/Oem/Hpe/System/0/Status/Health",
+        "/Oem/Hpe/Time",
+        "/Product",
+        "/ProtocolFeaturesSupported/ExpandQuery/ExpandAll",
+        "/ProtocolFeaturesSupported/ExpandQuery/Levels",
+        "/ProtocolFeaturesSupported/ExpandQuery/Links",
+        "/ProtocolFeaturesSupported/ExpandQuery/MaxLevels",
+        "/ProtocolFeaturesSupported/ExpandQuery/NoLinks",
+        "/ProtocolFeaturesSupported/FilterQuery",
+        "/ProtocolFeaturesSupported/OnlyMemberQuery",
+        "/ProtocolFeaturesSupported/SelectQuery",
+        "/RedfishVersion",
+        "/Registries/@odata.id",
+        "/SessionService/@odata.id",
+        "/Systems/@odata.id",
+        "/Tasks/@odata.id",
+        "/TelemetryService/@odata.id",
+        "/UUID",
+        "/UpdateService/@odata.id",
+        "/Vendor"
+      ]
+    },
+    "fields": [
+      {
+        "name": "ManagersEndpoint",
+        "request_paths": [
+          "/redfish/v1"
+        ],
+        "json_pointers": [
+          "/Managers/@odata.id"
+        ]
+      },
+      {
+        "name": "ServiceName",
+        "request_paths": [
+          "/redfish/v1"
+        ],
+        "json_pointers": [
+          "/Name"
+        ]
+      },
+      {
+        "name": "Product",
+        "request_paths": [
+          "/redfish/v1"
+        ],
+        "json_pointers": [
+          "/Product"
+        ]
+      },
+      {
+        "name": "Vendor",
+        "request_paths": [
+          "/redfish/v1"
+        ],
+        "json_pointers": [
+          "/Vendor"
+        ]
+      },
+      {
+        "name": "RedfishVersion",
+        "request_paths": [
+          "/redfish/v1"
+        ],
+        "json_pointers": [
+          "/RedfishVersion"
+        ]
+      },
+      {
+        "name": "RedfishUUID",
+        "request_paths": [
+          "/redfish/v1"
+        ],
+        "json_pointers": [
+          "/UUID"
+        ]
+      },
+      {
+        "name": "IloManagerHostName",
+        "request_paths": [
+          "/redfish/v1"
+        ],
+        "json_pointers": [
+          "/Oem/Hpe/Manager/0/HostName"
+        ]
+      },
+      {
+        "name": "IloManagerFQDN",
+        "request_paths": [
+          "/redfish/v1"
+        ],
+        "json_pointers": [
+          "/Oem/Hpe/Manager/0/FQDN"
+        ]
+      },
+      {
+        "name": "IloManagerType",
+        "request_paths": [
+          "/redfish/v1"
+        ],
+        "json_pointers": [
+          "/Oem/Hpe/Manager/0/ManagerType"
+        ]
+      },
+      {
+        "name": "IloManagerFirmwareVersion",
+        "request_paths": [
+          "/redfish/v1"
+        ],
+        "json_pointers": [
+          "/Oem/Hpe/Manager/0/ManagerFirmwareVersion"
+        ]
+      },
+      {
+        "name": "IloManagerHealth",
+        "request_paths": [
+          "/redfish/v1"
+        ],
+        "json_pointers": [
+          "/Oem/Hpe/Manager/0/Status/Health"
+        ]
+      },
+      {
+        "name": "IloTime",
+        "request_paths": [
+          "/redfish/v1"
+        ],
+        "json_pointers": [
+          "/Oem/Hpe/Time"
         ]
       }
     ]

@@ -191,6 +191,14 @@ Notes:
 - The script requests each unique configured Redfish path once per host and reuses the JSON payload across fields.
 - JSON pointers must use slash-separated segments (for example `/SerialNumber` or `/Managers/@odata.id`).
 - Set `redfish.enabled` to `false` to disable Redfish enrichment without removing config.
+- If your environment returns HTTP 401 for some Redfish paths, keep those mappings in `redfish.disabled_fields_http_401` so they stay documented but inactive.
+- To re-enable a previously disabled mapping, move it from `redfish.disabled_fields_http_401` back into `redfish.fields` after validating unauthenticated access (or after adding authentication support in a future script update).
+
+Redfish settings sections used in this repository:
+
+- `redfish.fields`: active curated mappings used at runtime for CSV output.
+- `redfish.all_discovered_unauth_fields_reference`: reference inventory of all JSON pointers discovered from unauthenticated crawling (currently rooted at `/redfish/v1`); this block is documentation and is not read by the script.
+- `redfish.disabled_fields_http_401`: known mappings that returned unauthorized responses in testing; this block is also documentation and is not read by the script.
 
 ### Notes
 
