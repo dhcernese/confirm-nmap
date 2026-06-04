@@ -196,9 +196,29 @@ Notes:
 
 Redfish settings sections used in this repository:
 
-- `redfish.fields`: active curated mappings used at runtime for CSV output.
-- `redfish.all_discovered_unauth_fields_reference`: reference inventory of all JSON pointers discovered from unauthenticated crawling (currently rooted at `/redfish/v1`); this block is documentation and is not read by the script.
-- `redfish.disabled_fields_http_401`: known mappings that returned unauthorized responses in testing; this block is also documentation and is not read by the script.
+- `redfish.fields`: active curated mappings used at runtime for CSV output. See [How discovered unauth fields were found](README.md#how-discovered-unauth-fields-were-found).
+- `redfish.all_discovered_unauth_fields_reference`: reference inventory of all JSON pointers discovered from unauthenticated crawling (currently rooted at `/redfish/v1`); this block is documentation and is not read by the script. See [How discovered unauth fields were found](README.md#how-discovered-unauth-fields-were-found).
+- `redfish.disabled_fields_http_401`: known mappings that returned unauthorized responses in testing; this block is also documentation and is not read by the script. See [How discovered unauth fields were found](README.md#how-discovered-unauth-fields-were-found).
+
+### How discovered unauth fields were found
+
+The discovered unauth fields were found by unauthenticated Redfish endpoint inspection, then captured as a reference list.
+
+What happened in this repository:
+
+1. We queried Redfish without credentials (starting at `/redfish/v1`) and observed which JSON keys/pointers were returned.
+2. We recorded those discovered pointers in the `all_discovered_unauth_fields_reference` block in `settings.example.json` and `settings.json`.
+3. That reference block is documentation only, not active extraction logic. Runtime extraction reads `redfish.fields` (plus `xml_fields`) for output.
+4. During execution, the script requests each configured `redfish.fields` request path, resolves configured JSON pointers, and writes values to CSV.
+
+So, "discovered unauth fields" means fields previously observed to be accessible without authentication, while only the curated subset in `redfish.fields` is emitted as output columns.
+
+Related files:
+
+- [settings.example.json](settings.example.json)
+- [settings.json](settings.json)
+- [scan_and_get.py](scan_and_get.py)
+- [README.md](README.md)
 
 ### Notes
 
