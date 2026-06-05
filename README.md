@@ -16,6 +16,7 @@ This repo includes [scan_and_get.py](scan_and_get.py), a Windows-friendly script
 8. Supports dry-run discovery and periodic progress logging for large scans.
 9. Can read Nmap arguments from a plain-text file to avoid PowerShell quoting problems.
 10. Optionally performs per-host unauthenticated Redfish JSON queries and writes mapped fields as extra CSV columns.
+11. Supports a Redfish-only mode that skips XML endpoint requests/parsing and outputs only Redfish columns.
 
 ### Requirements
 
@@ -77,6 +78,12 @@ You can also point at an explicit args file from the CLI instead of embedding a 
 
 ```powershell
 python scan_and_get.py --cidr 10.152.160.0/20 --settings settings.json --nmap-args-file .\nmap-ilo443.args.txt --dry-run --csv-output discovery.csv
+```
+
+Produce only Redfish output columns (no XML request/parsing):
+
+```powershell
+python scan_and_get.py --cidr 10.152.161.0/24 --settings settings.json --redfish-only --csv-output redfish_only_results.csv
 ```
 
 Override selected settings from CLI (JSON remains the base config):
@@ -226,6 +233,7 @@ Related files:
 - XML namespaces are stripped before field lookup, making simple XPaths like `.//SerialNumber` work across namespace variations.
 - CSV output always includes `ip`; when `--debug` is enabled it also includes `url`, `error`, `xml_parse_error`, and `redfish_error`.
 - CSV output includes one column per configured `xml_fields.name` plus one column per configured `redfish.fields.name`.
+- `--redfish-only` skips requests to `request.path` (default `/xmldata?item=All`) and writes only `ip` plus configured `redfish.fields.name` columns.
 - When Nmap output contains port results, the script only targets hosts that show an open port in grepable output. This prevents `-Pn` scans from blindly hitting every IP in a large CIDR.
 - When `-Pn` is present in the configured Nmap arguments, the script refuses to trust grepable `Status: Up` lines unless `Ports:` output is also present. This stops unsafe fallbacks caused by mangled shell quoting.
 - The default safety limit is `2048` HTTP targets. Raise it only when your Nmap arguments are already selective.

@@ -558,6 +558,7 @@ def fetch_endpoint(
     redfish_timeout: float,
     workers: int,
     progress_every: int,
+    redfish_only: bool,
 ) -> List[HttpResult]:
     if scheme == "https":
         urllib3.disable_warnings(category=InsecureRequestWarning)
@@ -565,6 +566,22 @@ def fetch_endpoint(
     def fetch_one(ip: str) -> HttpResult:
         normalized_path = path if path.startswith("/") else f"/{path}"
         url = f"{scheme}://{ip}{normalized_path}"
+
+        if redfish_only:
+            redfish_values, redfish_error = fetch_redfish_fields_for_host(
+                ip=ip,
+                scheme=scheme,
+                timeout=redfish_timeout,
+                field_specs=redfish_fields,
+            )
+            return HttpResult(
+                ip=ip,
+                url=f"{scheme}://{ip}",
+                ok=True,
+                redfish_fields=redfish_values,
+                redfish_error=redfish_error,
+            )
+
         try:
             resp = requests.get(url, timeout=timeout, verify=False if scheme == "https" else True)
             parsed_fields, parse_error = parse_xml_fields(resp.text, xml_fields)
@@ -624,12 +641,16 @@ def write_csv_results(
     redfish_field_specs: list[dict[str, Any]],
     csv_path: str,
     debug: bool = False,
+    redfish_only: bool = False,
 ) -> None:
     field_names = [spec["name"] for spec in field_specs]
     redfish_field_names = [spec["name"] for spec in redfish_field_specs]
     headers = ["ip"]
     if debug:
-        headers.extend(["url", "error", "xml_parse_error", "redfish_error"])
+        headers.extend(["url", "error"])
+        if not redfish_only:
+            headers.append("xml_parse_error")
+        headers.append("redfish_error")
     headers.extend(field_names)
     headers.extend(redfish_field_names)
 
@@ -640,12 +661,15 @@ def write_csv_results(
         for result in results:
             row = {"ip": result.ip}
             if debug:
-                row.update({
-                    "url": result.url,
-                    "error": result.error or "",
-                    "xml_parse_error": result.parse_error or "",
-                    "redfish_error": result.redfish_error or "",
-                })
+                row.update(
+                    {
+                        "url": result.url,
+                        "error": result.error or "",
+                        "redfish_error": result.redfish_error or "",
+                    }
+                )
+                if not redfish_only:
+                    row["xml_parse_error"] = result.parse_error or ""
             for field_name in field_names:
                 value = ""
                 if result.parsed_fields:
@@ -751,6 +775,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip unauthenticated Redfish enrichment queries.",
     )
+    parser.add_argument(
+        "--redfish-only",
+        action="store_true",
+        help="Skip XML endpoint requests/parsing and output only Redfish fields.",
+    )
 
     return parser.parse_args()
 
@@ -768,6 +797,10 @@ def main() -> int:
     nmap_settings = settings.get("nmap", {}) if isinstance(settings.get("nmap", {}), dict) else {}
     execution_settings = settings.get("execution", {}) if isinstance(settings.get("execution", {}), dict) else {}
     redfish_settings = settings.get("redfish", {}) if isinstance(settings.get("redfish", {}), dict) else {}
+
+    if args.redfish_only and args.no_redfish:
+        print("[error] --redfish-only cannot be combined with --no-redfish.", file=sys.stderr)
+        return 1
 
     scheme = args.scheme or request_settings.get("scheme", "https")
     path = args.path or request_settings.get("path", "/xmldata?item=All")
@@ -790,10 +823,17 @@ def main() -> int:
     progress_every = (
         args.progress_every if args.progress_every is not None else int(execution_settings.get("progress_every", 50))
     )
-    xml_fields = settings["xml_fields"]
-    redfish_enabled = bool(redfish_settings.get("enabled", True)) and not args.no_redfish
+    xml_fields = [] if args.redfish_only else settings["xml_fields"]
+    redfish_enabled = (args.redfish_only or bool(redfish_settings.get("enabled", True))) and not args.no_redfish
     redfish_fields = redfish_settings.get("fields", []) if redfish_enabled else []
     redfish_timeout = float(redfish_settings.get("timeout", timeout))
+
+    if args.redfish_only and not redfish_fields:
+        print(
+            "[error] --redfish-only requested but no redfish.fields are configured in settings.",
+            file=sys.stderr,
+        )
+        return 1
 
     try:
         require_open_port_output = "-Pn" in nmap_arg_tokens
@@ -850,6 +890,7 @@ def main() -> int:
         redfish_timeout=redfish_timeout,
         workers=workers,
         progress_every=progress_every,
+        redfish_only=args.redfish_only,
     )
 
     print("\nHTTP GET results")
@@ -881,6 +922,7 @@ def main() -> int:
         redfish_field_specs=redfish_fields,
         csv_path=args.csv_output,
         debug=args.debug,
+        redfish_only=args.redfish_only,
     )
     print(f"\nCSV written: {args.csv_output}")
 
