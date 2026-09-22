@@ -146,13 +146,33 @@ Add `-Live` to also start [tests/mock_bmc_server.py](tests/mock_bmc_server.py) o
 pwsh tests/compare-python-go.ps1 -Live
 ```
 
+`-Live` replays each device profile in turn. The profiles reproduce response shapes seen in previous scan results, so the comparison covers the awkward cases rather than one happy path:
+
+| Profile | What it exercises |
+| --- | --- |
+| `ilo5` | Gen10 iLO 5: full XML plus an HPE Redfish root with the `Oem/Hpe` manager block |
+| `ilo4` | Gen9 iLO 4: `HP RESTful Root Service`, Redfish 1.0.0, trailing-slash Managers link, no `Product`/`Vendor`/`Oem`, so most OEM columns go `<missing>` |
+| `ilo6` | Redfish 1.20.0, `Warning` health, `HPE Compute Ops Management`, non-HPE vendor string |
+| `ilo7` | Redfish 1.22.1 and an `iLO 7` NIC description the configured XPaths do not match, so `ILOManagementIP` is `<missing>` while `AllAssignedNICIPs` is populated |
+| `onboard-admin` | c7000 Onboard Administrator: `MP`-only XML (no `HSI`/`NICS`/`HEALTH`) and no Redfish service |
+| `idrac` | Non-HPE BMC: no XML endpoint, minimal Redfish root without `UUID` or `Oem` |
+| `redfish-unauthorized` | XML responds while Redfish returns HTTP 401 with a JSON error body |
+| `malformed-xml` | Truncated XML body with a working Redfish service |
+| `dead-host` | Listening host that answers 404 for every path |
+
+List them directly with:
+
+```powershell
+python tests/mock_bmc_server.py --list
+```
+
 Harness notes:
 
 - All discovery cases target `127.0.0.1` (plus `192.0.2.1` for the no-hosts path); override with `-Cidr` only for a range you are authorized to scan.
 - The harness builds the binary first; pass `-SkipBuild` to test an existing `scan_and_get.exe`.
 - Fixtures and CSV output go to a temp directory that is deleted unless `-KeepArtifacts` is passed.
 - Cases that surface library error text compare CSV headers only; all other cases compare every row.
-- `-Live` needs `127.0.0.1:80` to be free.
+- `-Live` needs `127.0.0.1:80` to be free. It refuses to start if something is already listening, and verifies each started server reports the expected profile via `/mock/profile`, so results can never come from a stale listener.
 
 ### Settings format
 

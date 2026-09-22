@@ -18,7 +18,9 @@
 
 .PARAMETER Live
     Also run cases against tests/mock_bmc_server.py, which binds 127.0.0.1:80 and
-    returns iLO XML plus Redfish JSON. This compares real extracted field values.
+    serves each device profile in turn (iLO 4/5/6/7, Onboard Administrator,
+    non-HPE BMC, unauthorized Redfish, malformed XML, dead host). This compares
+    real extracted field values.
 
 .EXAMPLE
     pwsh tests/compare-python-go.ps1
@@ -102,47 +104,19 @@ try {
         @{ n = 'workers-and-progress'; a = @('--cidr', $Cidr, '--nmap-args', $localArgs, '--scheme', 'http', '--timeout', '2', '--workers', '4', '--progress-every', '1'); csv = 'full' }
     )
 
-    $server = $null
-    if ($Live) {
-        $serverScript = Join-Path $PSScriptRoot 'mock_bmc_server.py'
-        Write-Host 'Starting mock BMC server on 127.0.0.1:80...'
-        $server = Start-Process -FilePath $Python -ArgumentList $serverScript -PassThru -WindowStyle Hidden
-
-        $ready = $false
-        foreach ($attempt in 1..25) {
-            try {
-                $client = [System.Net.Sockets.TcpClient]::new()
-                $client.Connect('127.0.0.1', 80)
-                $client.Close()
-                $ready = $true
-                break
-            }
-            catch {
-                Start-Sleep -Milliseconds 200
-            }
-        }
-        if (-not $ready) { throw 'mock BMC server did not start (is 127.0.0.1:80 already in use?)' }
-
-        $cases += @(
-            @{ n = 'live-xml-and-redfish'; a = @('--cidr', $Cidr, '--nmap-args', $localArgs, '--scheme', 'http', '--timeout', '5'); csv = 'full' }
-            @{ n = 'live-debug-columns'; a = @('--cidr', $Cidr, '--nmap-args', $localArgs, '--scheme', 'http', '--timeout', '5', '--debug'); csv = 'full' }
-            @{ n = 'live-redfish-only'; a = @('--cidr', $Cidr, '--nmap-args', $localArgs, '--scheme', 'http', '--timeout', '5', '--redfish-only'); csv = 'full' }
-            @{ n = 'live-no-redfish'; a = @('--cidr', $Cidr, '--nmap-args', $localArgs, '--scheme', 'http', '--timeout', '5', '--no-redfish'); csv = 'full' }
-            @{ n = 'live-non-xml-body'; a = @('--cidr', $Cidr, '--nmap-args', $localArgs, '--scheme', 'http', '--timeout', '5', '--path', '/redfish/v1', '--debug'); csv = 'header' }
-        )
-    }
-
     $report = @()
     $previousPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
 
-    foreach ($case in $cases) {
-        $goCsv = Join-Path $work "$($case.n).go.csv"
-        $pyCsv = Join-Path $work "$($case.n).py.csv"
+    function Invoke-ParityCase {
+        param($Case)
 
-        $goArgs = @($case.a)
-        $pyArgs = @($case.a)
-        if ($case.csv) {
+        $goCsv = Join-Path $work "$($Case.n).go.csv"
+        $pyCsv = Join-Path $work "$($Case.n).py.csv"
+
+        $goArgs = @($Case.a)
+        $pyArgs = @($Case.a)
+        if ($Case.csv) {
             $goArgs += @('--csv-output', $goCsv)
             $pyArgs += @('--csv-output', $pyCsv)
         }
@@ -153,13 +127,13 @@ try {
         $pyExit = $LASTEXITCODE
 
         $csvStatus = 'n/a'
-        if ($case.csv) {
+        if ($Case.csv) {
             $goExists = Test-Path $goCsv
             $pyExists = Test-Path $pyCsv
             if ($goExists -and $pyExists) {
                 $goLines = @(Get-Content $goCsv)
                 $pyLines = @(Get-Content $pyCsv)
-                if ($case.csv -eq 'header') {
+                if ($Case.csv -eq 'header') {
                     $csvStatus = if ($goLines[0] -eq $pyLines[0]) { 'header-match' } else { 'HEADER-DIFF' }
                 }
                 else {
@@ -177,8 +151,8 @@ try {
         $firstLine = (($goOut -split "`r?`n") | Where-Object { $_.Trim() } | Select-Object -First 1)
         if ($firstLine -and $firstLine.Length -gt 70) { $firstLine = $firstLine.Substring(0, 70) + '...' }
 
-        $report += [pscustomobject]@{
-            Case    = $case.n
+        [pscustomobject]@{
+            Case    = $Case.n
             GoExit  = $goExit
             PyExit  = $pyExit
             Exit    = if ($goExit -eq $pyExit) { 'ok' } else { 'MISMATCH' }
@@ -187,9 +161,88 @@ try {
         }
     }
 
-    $ErrorActionPreference = $previousPreference
+    foreach ($case in $cases) {
+        $report += Invoke-ParityCase -Case $case
+    }
 
-    if ($server -and -not $server.HasExited) { Stop-Process -Id $server.Id -Force }
+    if ($Live) {
+        $serverScript = Join-Path $PSScriptRoot 'mock_bmc_server.py'
+
+        function Test-MockPort {
+            try {
+                $client = [System.Net.Sockets.TcpClient]::new()
+                $client.Connect('127.0.0.1', 80)
+                $client.Close()
+                return $true
+            }
+            catch {
+                return $false
+            }
+        }
+
+        function Stop-MockServer {
+            param($Process)
+            if (-not $Process) { return }
+            # The venv launcher spawns the real interpreter, so kill the whole tree.
+            & taskkill.exe /PID $Process.Id /T /F 2>&1 | Out-Null
+            foreach ($attempt in 1..25) {
+                if (-not (Test-MockPort)) { return }
+                Start-Sleep -Milliseconds 200
+            }
+            throw 'mock BMC server did not release 127.0.0.1:80'
+        }
+
+        if (Test-MockPort) {
+            throw '127.0.0.1:80 is already in use; stop the other listener before running -Live'
+        }
+
+        # Profiles whose XML endpoint is absent or malformed produce parser-specific
+        # error text, so those cases compare CSV headers only.
+        $profiles = @(
+            @{ name = 'ilo5'; xmlOk = $true }
+            @{ name = 'ilo4'; xmlOk = $true }
+            @{ name = 'ilo6'; xmlOk = $true }
+            @{ name = 'ilo7'; xmlOk = $true }
+            @{ name = 'onboard-admin'; xmlOk = $true }
+            @{ name = 'redfish-unauthorized'; xmlOk = $true }
+            @{ name = 'idrac'; xmlOk = $false }
+            @{ name = 'malformed-xml'; xmlOk = $false }
+            @{ name = 'dead-host'; xmlOk = $false }
+        )
+
+        foreach ($profile in $profiles) {
+            Write-Host "Starting mock BMC server (profile: $($profile.name))..."
+            $server = Start-Process -FilePath $Python `
+                -ArgumentList @($serverScript, '--profile', $profile.name) `
+                -PassThru -WindowStyle Hidden
+
+            $ready = $false
+            foreach ($attempt in 1..25) {
+                if (Test-MockPort) { $ready = $true; break }
+                Start-Sleep -Milliseconds 200
+            }
+            if (-not $ready) { throw "mock BMC server did not start for profile $($profile.name)" }
+
+            # Guard against serving results from a stale or mismatched server.
+            $served = (Invoke-WebRequest -Uri 'http://127.0.0.1/mock/profile' -UseBasicParsing).Content.Trim()
+            if ($served -ne $profile.name) {
+                Stop-MockServer -Process $server
+                throw "mock BMC server reported profile '$served' but '$($profile.name)' was requested"
+            }
+
+            $liveBase = @('--cidr', $Cidr, '--nmap-args', $localArgs, '--scheme', 'http', '--timeout', '5')
+            $debugCsv = if ($profile.xmlOk) { 'full' } else { 'header' }
+
+            $report += Invoke-ParityCase -Case @{ n = "live-$($profile.name)"; a = $liveBase; csv = 'full' }
+            $report += Invoke-ParityCase -Case @{ n = "live-$($profile.name)-debug"; a = ($liveBase + '--debug'); csv = $debugCsv }
+            $report += Invoke-ParityCase -Case @{ n = "live-$($profile.name)-redfish-only"; a = ($liveBase + '--redfish-only'); csv = 'full' }
+            $report += Invoke-ParityCase -Case @{ n = "live-$($profile.name)-no-redfish"; a = ($liveBase + '--no-redfish'); csv = 'full' }
+
+            Stop-MockServer -Process $server
+        }
+    }
+
+    $ErrorActionPreference = $previousPreference
 
     $report | Format-Table -AutoSize -Wrap
 
