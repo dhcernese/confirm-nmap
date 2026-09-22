@@ -21,6 +21,8 @@ Equivalent dependency-free Go port: `cmd/scan-and-get` (standard library only).
 - `cmd/scan-and-get/redfish.go`: Go JSON pointer resolution and Redfish enrichment requests.
 - `cmd/scan-and-get/fetch.go`: Go concurrent HTTP fetch layer (TLS verification disabled for self-signed BMC certs).
 - `cmd/scan-and-get/csvout.go`: Go CSV writers for discovery and full results.
+- `tests/compare-python-go.ps1`: Cross-implementation harness; runs identical CLI cases through both implementations and compares exit codes and CSV output.
+- `tests/mock_bmc_server.py`: Local iLO/Redfish stand-in used by the harness `-Live` mode.
 - `settings.json`: Local runtime configuration used by default.
 - `settings.example.json`: Template config for new environments.
 - `nmap-ilo443.args.txt`: Default Nmap argument set referenced by settings.
@@ -67,11 +69,15 @@ Generated/working artifacts (do not treat as source of truth):
 3. Keep `scan_and_get.py` and `cmd/scan-and-get` behaviorally equivalent: flags, defaults, console messages, and CSV columns must stay in sync.
 4. Keep the Go port dependency-free; do not add `require` entries to `go.mod`.
 5. After edits, run a smoke test:
+   - `pwsh tests/compare-python-go.ps1 -Live` must report zero failures.
    - Small CIDR dry-run (example `/30`) to verify CLI execution and CSV write.
 6. Validate no syntax or static-analysis errors remain (`go vet ./...` for the Go port).
 7. Update `README.md` when behavior, flags, or output columns change.
 
 ## Recommended Smoke Tests
+- Cross-implementation parity (preferred after any change to either implementation):
+  - `pwsh tests/compare-python-go.ps1`
+  - `pwsh tests/compare-python-go.ps1 -Live` (also compares real XML/Redfish field values)
 - Dry-run small range:
   - `python scan_and_get.py --cidr 10.152.161.100/30 --settings settings.json --dry-run --csv-output smoke_discovery.csv`
   - `go build -o scan_and_get.exe ./cmd/scan-and-get; .\scan_and_get.exe --cidr 10.152.161.100/30 --settings settings.json --dry-run --csv-output smoke_discovery.csv`

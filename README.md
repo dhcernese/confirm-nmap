@@ -132,6 +132,28 @@ Go port notes:
 - Numbers from Redfish JSON keep their original literal form (for example `1.6.0` stays a string, `2` stays `2`).
 - Build output (`scan_and_get.exe`) is git-ignored.
 
+### Cross-implementation test harness
+
+[tests/compare-python-go.ps1](tests/compare-python-go.ps1) runs the same CLI cases through both implementations with identical arguments and fails if exit codes or CSV output diverge. It covers argument parsing, settings validation, Nmap failure and safety paths, discovery, the `--max-targets` cap, and every output mode (`--debug`, `--no-redfish`, `--redfish-only`).
+
+```powershell
+pwsh tests/compare-python-go.ps1
+```
+
+Add `-Live` to also start [tests/mock_bmc_server.py](tests/mock_bmc_server.py) on `127.0.0.1:80` and compare real extracted XML and Redfish values rather than connection failures:
+
+```powershell
+pwsh tests/compare-python-go.ps1 -Live
+```
+
+Harness notes:
+
+- All discovery cases target `127.0.0.1` (plus `192.0.2.1` for the no-hosts path); override with `-Cidr` only for a range you are authorized to scan.
+- The harness builds the binary first; pass `-SkipBuild` to test an existing `scan_and_get.exe`.
+- Fixtures and CSV output go to a temp directory that is deleted unless `-KeepArtifacts` is passed.
+- Cases that surface library error text compare CSV headers only; all other cases compare every row.
+- `-Live` needs `127.0.0.1:80` to be free.
+
 ### Settings format
 
 `xml_fields` must contain objects with:
