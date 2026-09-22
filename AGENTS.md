@@ -8,9 +8,19 @@ This repository provides a Windows-friendly Python workflow to:
 - Export discovery and result data to CSV.
 
 Primary script: `scan_and_get.py`.
+Equivalent dependency-free Go port: `cmd/scan-and-get` (standard library only).
 
 ## Repository File Map
 - `scan_and_get.py`: Main CLI and runtime logic (arg parsing, Nmap discovery, HTTP fetch, XML parse, CSV write).
+- `go.mod`: Go module definition (no third-party requirements).
+- `cmd/scan-and-get/main.go`: Go CLI entrypoint, flag parsing, and orchestration.
+- `cmd/scan-and-get/settings.go`: Go settings load/validation mirroring `load_settings`.
+- `cmd/scan-and-get/nmap.go`: Go Nmap discovery, arg resolution, and grepable output parsing.
+- `cmd/scan-and-get/xmltree.go`: Go XML parsing, namespace stripping, and XML field extraction.
+- `cmd/scan-and-get/xpath.go`: Minimal ElementTree-compatible XPath subset evaluator.
+- `cmd/scan-and-get/redfish.go`: Go JSON pointer resolution and Redfish enrichment requests.
+- `cmd/scan-and-get/fetch.go`: Go concurrent HTTP fetch layer (TLS verification disabled for self-signed BMC certs).
+- `cmd/scan-and-get/csvout.go`: Go CSV writers for discovery and full results.
 - `settings.json`: Local runtime configuration used by default.
 - `settings.example.json`: Template config for new environments.
 - `nmap-ilo443.args.txt`: Default Nmap argument set referenced by settings.
@@ -54,14 +64,17 @@ Generated/working artifacts (do not treat as source of truth):
 ## Editing Rules for Future Agents
 1. Make minimal, targeted changes.
 2. Do not remove or relocate the CLI entrypoint unless explicitly requested.
-3. After edits, run a smoke test:
+3. Keep `scan_and_get.py` and `cmd/scan-and-get` behaviorally equivalent: flags, defaults, console messages, and CSV columns must stay in sync.
+4. Keep the Go port dependency-free; do not add `require` entries to `go.mod`.
+5. After edits, run a smoke test:
    - Small CIDR dry-run (example `/30`) to verify CLI execution and CSV write.
-4. Validate no syntax or static-analysis errors remain.
-5. Update `README.md` when behavior, flags, or output columns change.
+6. Validate no syntax or static-analysis errors remain (`go vet ./...` for the Go port).
+7. Update `README.md` when behavior, flags, or output columns change.
 
 ## Recommended Smoke Tests
 - Dry-run small range:
   - `python scan_and_get.py --cidr 10.152.161.100/30 --settings settings.json --dry-run --csv-output smoke_discovery.csv`
+  - `go build -o scan_and_get.exe ./cmd/scan-and-get; .\scan_and_get.exe --cidr 10.152.161.100/30 --settings settings.json --dry-run --csv-output smoke_discovery.csv`
 - Optional full run against a constrained range when safe:
   - `python scan_and_get.py --cidr <small-cidr> --settings settings.json --csv-output results.csv`
 

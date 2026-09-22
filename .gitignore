@@ -2,3 +2,8 @@
 *.csv
 *.log
 *.xlsx
+
+# Ignore compiled Go binaries (root-anchored so cmd/scan-and-get/ stays tracked)
+/scan_and_get.exe
+/scan-and-get.exe
+/scan-and-get

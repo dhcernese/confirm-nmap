@@ -1,6 +1,11 @@
 # confirm-nmap
 just to compare with SG nmap
 
+Two interchangeable implementations are provided:
+
+- [scan_and_get.py](scan_and_get.py) — Python version (requires `pip install -r requirements.txt`).
+- [cmd/scan-and-get](cmd/scan-and-get) — Go version built only on the standard library (no third-party dependencies). See [Go port](README.md#go-port-no-third-party-dependencies).
+
 ## Python Nmap + HTTP GET helper
 
 This repo includes [scan_and_get.py](scan_and_get.py), a Windows-friendly script that:
@@ -91,6 +96,41 @@ Override selected settings from CLI (JSON remains the base config):
 ```powershell
 python scan_and_get.py --cidr 10.152.161.0/24 --settings settings.json --path "/xmldata?item=All" --nmap-args "-sn"
 ```
+
+## Go port (no third-party dependencies)
+
+[cmd/scan-and-get](cmd/scan-and-get) contains a functionally equivalent Go implementation that uses only the Go standard library. It reads the same `settings.json`, accepts the same flags, and produces the same console output and CSV columns as [scan_and_get.py](scan_and_get.py).
+
+Build it once and run the resulting single executable — no Python, no `pip install`:
+
+```powershell
+go build -o scan_and_get.exe ./cmd/scan-and-get
+.\scan_and_get.exe --cidr 10.152.161.0/24 --settings settings.json --csv-output results.csv
+```
+
+Every Python flag is supported with the same name and default:
+
+```powershell
+.\scan_and_get.exe --cidr 10.152.161.0/24 --settings settings.json --dry-run --csv-output discovery.csv
+.\scan_and_get.exe --cidr 10.152.161.0/24 --settings settings.json --redfish-only --csv-output redfish_only_results.csv
+.\scan_and_get.exe --cidr 10.152.160.0/20 --settings settings.json --workers 64 --max-targets 2500
+.\scan_and_get.exe --cidr 10.152.161.101/32 --settings settings.json --scheme http --timeout 2 --debug
+```
+
+Cross-compile for another platform from Windows:
+
+```powershell
+$env:GOOS = "linux"; $env:GOARCH = "amd64"; go build -o scan-and-get ./cmd/scan-and-get
+```
+
+Go port notes:
+
+- Nmap is still required for host discovery; only the Python/`pip` dependencies are removed.
+- The XML field lookup implements the ElementTree XPath subset used by this repo: relative paths, `//` descendant steps, `*` wildcards, `..` parent steps, and the predicates `[n]`, `[last()]`, `[@attr]`, `[@attr='value']`, `[tag]`, `[tag='value']`, and `[.='value']`.
+- XML namespaces are stripped during parsing, matching the Python behavior.
+- Error text in the `--debug` columns (`error`, `redfish_error`, `xml_parse_error`) comes from the Go standard library, so the wording differs from `requests`/ElementTree. Exit codes, discovered hosts, and all field values match.
+- Numbers from Redfish JSON keep their original literal form (for example `1.6.0` stays a string, `2` stays `2`).
+- Build output (`scan_and_get.exe`) is git-ignored.
 
 ### Settings format
 
@@ -225,6 +265,7 @@ Related files:
 - [settings.example.json](settings.example.json)
 - [settings.json](settings.json)
 - [scan_and_get.py](scan_and_get.py)
+- [cmd/scan-and-get](cmd/scan-and-get)
 - [README.md](README.md)
 
 ### Notes
