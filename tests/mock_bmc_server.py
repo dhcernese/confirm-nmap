@@ -310,7 +310,7 @@ class Handler(BaseHTTPRequestHandler):
     profile = PROFILES["ilo5"]
     profile_name = "ilo5"
 
-    def log_message(self, *args):
+    def log_message(self, format, *args):
         pass
 
     def do_GET(self):

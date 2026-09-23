@@ -2,7 +2,7 @@
   "request": {
     "scheme": "https",
     "path": "/xmldata?item=All",
-    "timeout": 5.0
+    "timeout": 10.0
   },
   "redfish": {
     "enabled": true,
@@ -273,7 +273,7 @@
     "args_file": "nmap-ilo443.args.txt"
   },
   "execution": {
-    "workers": 32,
+    "workers": 16,
     "max_targets": 2048,
     "progress_every": 50
   },

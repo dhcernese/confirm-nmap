@@ -210,10 +210,10 @@ try {
             @{ name = 'dead-host'; xmlOk = $false }
         )
 
-        foreach ($profile in $profiles) {
-            Write-Host "Starting mock BMC server (profile: $($profile.name))..."
+        foreach ($bmcProfile in $profiles) {
+            Write-Host "Starting mock BMC server (profile: $($bmcProfile.name))..."
             $server = Start-Process -FilePath $Python `
-                -ArgumentList @($serverScript, '--profile', $profile.name) `
+                -ArgumentList @($serverScript, '--profile', $bmcProfile.name) `
                 -PassThru -WindowStyle Hidden
 
             $ready = $false
@@ -221,22 +221,22 @@ try {
                 if (Test-MockPort) { $ready = $true; break }
                 Start-Sleep -Milliseconds 200
             }
-            if (-not $ready) { throw "mock BMC server did not start for profile $($profile.name)" }
+            if (-not $ready) { throw "mock BMC server did not start for profile $($bmcProfile.name)" }
 
             # Guard against serving results from a stale or mismatched server.
             $served = (Invoke-WebRequest -Uri 'http://127.0.0.1/mock/profile' -UseBasicParsing).Content.Trim()
-            if ($served -ne $profile.name) {
+            if ($served -ne $bmcProfile.name) {
                 Stop-MockServer -Process $server
-                throw "mock BMC server reported profile '$served' but '$($profile.name)' was requested"
+                throw "mock BMC server reported profile '$served' but '$($bmcProfile.name)' was requested"
             }
 
             $liveBase = @('--cidr', $Cidr, '--nmap-args', $localArgs, '--scheme', 'http', '--timeout', '5')
-            $debugCsv = if ($profile.xmlOk) { 'full' } else { 'header' }
+            $debugCsv = if ($bmcProfile.xmlOk) { 'full' } else { 'header' }
 
-            $report += Invoke-ParityCase -Case @{ n = "live-$($profile.name)"; a = $liveBase; csv = 'full' }
-            $report += Invoke-ParityCase -Case @{ n = "live-$($profile.name)-debug"; a = ($liveBase + '--debug'); csv = $debugCsv }
-            $report += Invoke-ParityCase -Case @{ n = "live-$($profile.name)-redfish-only"; a = ($liveBase + '--redfish-only'); csv = 'full' }
-            $report += Invoke-ParityCase -Case @{ n = "live-$($profile.name)-no-redfish"; a = ($liveBase + '--no-redfish'); csv = 'full' }
+            $report += Invoke-ParityCase -Case @{ n = "live-$($bmcProfile.name)"; a = $liveBase; csv = 'full' }
+            $report += Invoke-ParityCase -Case @{ n = "live-$($bmcProfile.name)-debug"; a = ($liveBase + '--debug'); csv = $debugCsv }
+            $report += Invoke-ParityCase -Case @{ n = "live-$($bmcProfile.name)-redfish-only"; a = ($liveBase + '--redfish-only'); csv = 'full' }
+            $report += Invoke-ParityCase -Case @{ n = "live-$($bmcProfile.name)-no-redfish"; a = ($liveBase + '--no-redfish'); csv = 'full' }
 
             Stop-MockServer -Process $server
         }

@@ -65,14 +65,21 @@ Generated/working artifacts (do not treat as source of truth):
 
 ## Editing Rules for Future Agents
 1. Make minimal, targeted changes.
-2. Do not remove or relocate the CLI entrypoint unless explicitly requested.
-3. Keep `scan_and_get.py` and `cmd/scan-and-get` behaviorally equivalent: flags, defaults, console messages, and CSV columns must stay in sync.
-4. Keep the Go port dependency-free; do not add `require` entries to `go.mod`.
-5. After edits, run a smoke test:
+2. If broader changes would meaningfully improve clarity, interfaces, or architecture, do not apply them silently. Describe the proposed refactor, its scope and risk, and let the user choose whether to take it.
+3. Do not remove or relocate the CLI entrypoint unless explicitly requested.
+4. Keep `scan_and_get.py` and `cmd/scan-and-get` behaviorally equivalent: flags, defaults, console messages, and CSV columns must stay in sync.
+5. Keep the Go port dependency-free; do not add `require` entries to `go.mod`.
+6. After edits, run a smoke test:
    - `pwsh tests/compare-python-go.ps1 -Live` must report zero failures.
    - Small CIDR dry-run (example `/30`) to verify CLI execution and CSV write.
-6. Validate no syntax or static-analysis errors remain (`go vet ./...` for the Go port).
-7. Update `README.md` when behavior, flags, or output columns change.
+7. Validate no syntax or static-analysis errors remain (`go vet ./...` for the Go port).
+8. After all tests pass, re-check the VS Code Problems panel and resolve any new diagnostics introduced by the change.
+   - Treat a diagnostic as real only after confirming it against a fresh analyzer run; language-server results can be stale after an edit.
+   - PowerShell: `Invoke-ScriptAnalyzer -Path <file>` (module ships with the PowerShell extension under `~/.vscode/extensions/ms-vscode.powershell-*/modules/PSScriptAnalyzer`). Clear stale results with the `PowerShell.RestartSession` command.
+   - Python: rely on Pylance diagnostics; re-open or reload the file if results look stale.
+   - Go: `go vet ./...`.
+   - Do not silence a diagnostic with a suppression unless the underlying pattern is intentional, and say why.
+9. Update `README.md` when behavior, flags, or output columns change.
 
 ## Recommended Smoke Tests
 - Cross-implementation parity (preferred after any change to either implementation):
